@@ -52,39 +52,3 @@ compile_commands.json
 *.tlog
 *.lastbuildstate
 *.unsuccessfulbuild
-
-# --- VS Code ---
-.vscode/
-*.code-workspace
-
-# --- JetBrains ---
-.idea/
-cmake-build-*/
-*.iml
-
-# --- ccls / clangd ---
-.cache/
-.ccls-cache/
-.clangd/
-
-# --- OS cruft ---
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# --- Editor backups ---
-*~
-*.bak
-*.swp
-*.swo
-*.tmp
-
-# --- Local-only ---
-*.local
-.env
-.env.*
-secrets/

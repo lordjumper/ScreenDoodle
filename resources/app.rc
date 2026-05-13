@@ -1,0 +1,8 @@
+#include <winuser.h>
+#include "resource.h"
+
+IDI_APP ICON "../assets/ScreenDoodle.ico"
+
+#ifdef __GNUC__
+1 24 "app.manifest"
+#endif
