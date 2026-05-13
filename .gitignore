@@ -1,0 +1,90 @@
+# --- Build output ---
+build/
+out/
+cmake-build-*/
+bin/
+obj/
+
+# --- Installer output ---
+installer/dist/
+installer/Output/
+*.iss.lock
+
+# --- CMake ---
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+_deps/
+*.cmake.in.bak
+compile_commands.json
+
+# --- Compiled binaries ---
+*.exe
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.obj
+*.o
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.res
+*.rc.o
+*.rc.obj
+*.manifest.bak
+
+# --- Visual Studio / MSBuild ---
+.vs/
+*.vcxproj.user
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+*.ipch
+*.aps
+*.tlog
+*.lastbuildstate
+*.unsuccessfulbuild
+
+# --- VS Code ---
+.vscode/
+*.code-workspace
+
+# --- JetBrains ---
+.idea/
+cmake-build-*/
+*.iml
+
+# --- ccls / clangd ---
+.cache/
+.ccls-cache/
+.clangd/
+
+# --- OS cruft ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# --- Editor backups ---
+*~
+*.bak
+*.swp
+*.swo
+*.tmp
+
+# --- Local-only ---
+*.local
+.env
+.env.*
+secrets/
