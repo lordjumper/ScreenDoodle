@@ -48,6 +48,7 @@ struct AppState {
     uint32_t* drawBits   = nullptr;
 
     uint32_t* savedBits = nullptr;
+    uint8_t*  strokeCov = nullptr;
 
     POINT lastPt{0, 0};
     RECT  strokeDirty{0, 0, 0, 0};

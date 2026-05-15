@@ -44,8 +44,15 @@ void CreateCanvasSurface() {
         return;
     }
 
+    A.strokeCov = new (std::nothrow) uint8_t[(size_t)A.sw * A.sh];
+    if (!A.strokeCov) {
+        DestroyCanvasSurface();
+        return;
+    }
+
     std::fill_n(A.drawBits,  (size_t)A.sw * A.sh, 0x01000000u);
     std::fill_n(A.savedBits, (size_t)A.sw * A.sh, 0x01000000u);
+    std::fill_n(A.strokeCov, (size_t)A.sw * A.sh, (uint8_t)0);
     A.history.clear();
     A.history.shrink_to_fit();
 }
@@ -60,6 +67,8 @@ void DestroyCanvasSurface() {
     A.drawBits = nullptr;
     delete[] A.savedBits;
     A.savedBits = nullptr;
+    delete[] A.strokeCov;
+    A.strokeCov = nullptr;
     std::vector<AppState::UndoEntry>().swap(A.history);
     HeapCompact(GetProcessHeap(), 0);
 }
@@ -131,6 +140,8 @@ void ClearCanvas() {
     std::fill_n(A.drawBits, (size_t)A.sw * A.sh, 0x01000000u);
     if (A.savedBits)
         std::fill_n(A.savedBits, (size_t)A.sw * A.sh, 0x01000000u);
+    if (A.strokeCov)
+        std::fill_n(A.strokeCov, (size_t)A.sw * A.sh, (uint8_t)0);
 
     RECT full{0, 0, A.sw, A.sh};
     UpdateOverlay(&full);
@@ -234,6 +245,25 @@ static void StampCircle(float cx, float cy, float r,
     }
 }
 
+static void StampCircleAliased(float cx, float cy, float r,
+                               BYTE sR, BYTE sG, BYTE sB, BYTE sA) {
+    if (!A.drawBits || r <= 0.0f) return;
+    int x0 = max((int)floorf(cx - r), 0);
+    int x1 = min((int)ceilf (cx + r), A.sw);
+    int y0 = max((int)floorf(cy - r), 0);
+    int y1 = min((int)ceilf (cy + r), A.sh);
+    float r2 = r * r;
+    for (int y = y0; y < y1; ++y) {
+        float dy = (float)y + 0.5f - cy;
+        uint32_t* row = A.drawBits + (size_t)y * A.sw;
+        for (int x = x0; x < x1; ++x) {
+            float dx = (float)x + 0.5f - cx;
+            if (dx*dx + dy*dy <= r2)
+                BlendPremul(&row[x], sR, sG, sB, sA, 255);
+        }
+    }
+}
+
 static void StampHighlighter(float cx, float cy, float r,
                              BYTE sR, BYTE sG, BYTE sB, BYTE sA) {
     if (!A.drawBits || !A.savedBits || r <= 0.0f) return;
@@ -284,6 +314,78 @@ static void StampErase(float cx, float cy, float r) {
     }
 }
 
+static void StampCapsule(float ax, float ay, float bx, float by, float r,
+                         BYTE sR, BYTE sG, BYTE sB) {
+    if (!A.drawBits || !A.savedBits || !A.strokeCov || r <= 0.0f) return;
+
+    float lo_x = (ax < bx ? ax : bx) - r - 1.0f;
+    float hi_x = (ax > bx ? ax : bx) + r + 1.0f;
+    float lo_y = (ay < by ? ay : by) - r - 1.0f;
+    float hi_y = (ay > by ? ay : by) + r + 1.0f;
+    int x0 = max((int)floorf(lo_x), 0);
+    int x1 = min((int)ceilf (hi_x), A.sw);
+    int y0 = max((int)floorf(lo_y), 0);
+    int y1 = min((int)ceilf (hi_y), A.sh);
+    if (x0 >= x1 || y0 >= y1) return;
+
+    float seg_dx = bx - ax;
+    float seg_dy = by - ay;
+    float seg_len2 = seg_dx * seg_dx + seg_dy * seg_dy;
+    bool isPoint = (seg_len2 < 1e-6f);
+    float inv_len2 = isPoint ? 0.0f : 1.0f / seg_len2;
+    float edge   = r + 0.5f;
+    float edge2  = edge * edge;
+
+    for (int y = y0; y < y1; ++y) {
+        float py = (float)y + 0.5f - ay;
+        size_t rowBase = (size_t)y * A.sw;
+        for (int x = x0; x < x1; ++x) {
+            float px = (float)x + 0.5f - ax;
+            float qx, qy;
+            if (isPoint) {
+                qx = px; qy = py;
+            } else {
+                float t = (px * seg_dx + py * seg_dy) * inv_len2;
+                if (t < 0.0f) t = 0.0f;
+                else if (t > 1.0f) t = 1.0f;
+                qx = px - t * seg_dx;
+                qy = py - t * seg_dy;
+            }
+            float d2 = qx * qx + qy * qy;
+            if (d2 >= edge2) continue;
+            float d = sqrtf(d2);
+            float covF = r - d + 0.5f;
+            unsigned cov;
+            if (covF >= 1.0f)      cov = 255;
+            else if (covF <= 0.0f) continue;
+            else                   cov = (unsigned)(covF * 255.0f + 0.5f);
+
+            uint8_t* covSlot = &A.strokeCov[rowBase + x];
+            if (cov <= *covSlot) continue;
+            *covSlot = (uint8_t)cov;
+
+            uint32_t* dst = &A.drawBits[rowBase + x];
+            *dst = A.savedBits[rowBase + x];
+            BlendPremul(dst, sR, sG, sB, 255, cov);
+        }
+    }
+}
+
+static void ClearStrokeCoverageRect(RECT r) {
+    if (!A.strokeCov) return;
+    if (r.left < 0) r.left = 0;
+    if (r.top  < 0) r.top  = 0;
+    if (r.right  > A.sw) r.right  = A.sw;
+    if (r.bottom > A.sh) r.bottom = A.sh;
+    int w = r.right - r.left;
+    int h = r.bottom - r.top;
+    if (w <= 0 || h <= 0) return;
+    for (int y = 0; y < h; ++y) {
+        std::fill_n(A.strokeCov + (size_t)(r.top + y) * A.sw + r.left,
+                    w, (uint8_t)0);
+    }
+}
+
 void StartStroke(POINT screenPt) {
     A.drawing = true;
     A.lastPt = screenPt;
@@ -297,6 +399,7 @@ void EndStroke() {
         && A.strokeDirty.bottom > A.strokeDirty.top) {
         PushHistory(A.strokeDirty);
         SyncSavedFromDraw(A.strokeDirty);
+        ClearStrokeCoverageRect(A.strokeDirty);
     }
     A.drawing = false;
 }
@@ -339,19 +442,24 @@ void DrawSegment(POINT a, POINT b) {
     {
         const Swatch& s = kPalette[A.paletteIdx];
         float radius = w * 0.5f;
-        float dx = (float)(bx - ax), dy = (float)(by - ay);
-        float dist = sqrtf(dx*dx + dy*dy);
-        int steps = max(1, (int)ceilf(dist));
-        for (int i = 0; i <= steps; ++i) {
-            float t = (steps == 0) ? 0.0f : (float)i / (float)steps;
-            float cx = (float)ax + dx * t;
-            float cy = (float)ay + dy * t;
-            if (eraser) {
-                StampErase(cx, cy, radius);
-            } else if (highlighter) {
-                StampHighlighter(cx, cy, radius, s.r, s.g, s.b, alpha);
-            } else {
-                StampCircle(cx, cy, radius, s.r, s.g, s.b, alpha);
+        if (A.tool == Tool::Pen) {
+            StampCapsule((float)ax, (float)ay, (float)bx, (float)by,
+                         radius, s.r, s.g, s.b);
+        } else {
+            float dx = (float)(bx - ax), dy = (float)(by - ay);
+            float dist = sqrtf(dx*dx + dy*dy);
+            int steps = max(1, (int)ceilf(dist));
+            for (int i = 0; i <= steps; ++i) {
+                float t = (steps == 0) ? 0.0f : (float)i / (float)steps;
+                float cx = (float)ax + dx * t;
+                float cy = (float)ay + dy * t;
+                if (eraser) {
+                    StampErase(cx, cy, radius);
+                } else if (highlighter) {
+                    StampHighlighter(cx, cy, radius, s.r, s.g, s.b, alpha);
+                } else {
+                    StampCircleAliased(cx, cy, radius, s.r, s.g, s.b, alpha);
+                }
             }
         }
     }
