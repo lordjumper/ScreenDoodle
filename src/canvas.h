@@ -13,4 +13,11 @@ void EndStroke();
 void ActivateOverlay();
 void DeactivateOverlay();
 
+void BeginTextEdit(POINT screenPt, const std::wstring* initial = nullptr);
+void CommitTextEdit();
+void CancelTextEdit();
+void RedrawTextEditIfActive();
+bool TryPickUpTextBox(POINT localPt);
+bool HitTestTextBox(POINT localPt);
+
 LRESULT CALLBACK CanvasProc(HWND, UINT, WPARAM, LPARAM);

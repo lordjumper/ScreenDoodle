@@ -4,6 +4,7 @@
 #include "widget.h"
 #include "settings.h"
 #include "tray.h"
+#include "updater.h"
 
 using namespace Gdiplus;
 
@@ -13,7 +14,7 @@ static LRESULT CALLBACK MsgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (wp == HOTKEY_TOGGLE) {
                 if (A.active) DeactivateOverlay(); else ActivateOverlay();
             } else if (wp == HOTKEY_UNDO && A.active) {
-                Undo();
+                if (!A.text.active) Undo();
             } else if (wp == HOTKEY_CLEAR && A.active) {
                 ClearCanvas();
             }
@@ -33,11 +34,57 @@ static LRESULT CALLBACK MsgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 case ID_TRAY_SETTINGS:
                     OpenSettingsWindow();
                     break;
+                case ID_TRAY_CHECK_UPDATE:
+                    StartUpdateCheck(true);
+                    break;
+                case ID_TRAY_UPDATE:
+                    if (HasInstallerUrl()) {
+                        StartUpdateDownload();
+                    } else {
+                        ShellExecuteW(nullptr, L"open", ReleasesPageUrl(),
+                                      nullptr, nullptr, SW_SHOWNORMAL);
+                    }
+                    break;
                 case ID_TRAY_EXIT:
                     PostQuitMessage(0);
                     break;
             }
             return 0;
+        case WM_UPDATE_RESULT: {
+            if (wp == kUpdateAvailable) {
+                A.nid.uFlags = NIF_INFO;
+                wcscpy_s(A.nid.szInfoTitle, L"ScreenDoodle update available");
+                wchar_t msg[200];
+                _snwprintf_s(msg, ARRAYSIZE(msg), _TRUNCATE,
+                    L"Version %s is out. Right-click the tray icon to install.",
+                    LatestVersionTag());
+                wcscpy_s(A.nid.szInfo, msg);
+                A.nid.dwInfoFlags = NIIF_INFO;
+                Shell_NotifyIconW(NIM_MODIFY, &A.nid);
+            } else if (wp == kUpdateDownloaded) {
+                ShellExecuteW(nullptr, L"open",
+                              DownloadedInstallerPath(),
+                              nullptr, nullptr, SW_SHOWNORMAL);
+                PostQuitMessage(0);
+            } else if (wp == kUpdateNone && IsManualCheck()) {
+                A.nid.uFlags = NIF_INFO;
+                wcscpy_s(A.nid.szInfoTitle, L"ScreenDoodle is up to date");
+                wchar_t msg[120];
+                _snwprintf_s(msg, ARRAYSIZE(msg), _TRUNCATE,
+                    L"You're running the latest version (%s).", kAppVersion);
+                wcscpy_s(A.nid.szInfo, msg);
+                A.nid.dwInfoFlags = NIIF_INFO;
+                Shell_NotifyIconW(NIM_MODIFY, &A.nid);
+            } else if (wp == kUpdateFailed && IsManualCheck()) {
+                A.nid.uFlags = NIF_INFO;
+                wcscpy_s(A.nid.szInfoTitle, L"ScreenDoodle update check failed");
+                wcscpy_s(A.nid.szInfo,
+                    L"Couldn't reach GitHub. Check your connection and try again.");
+                A.nid.dwInfoFlags = NIIF_WARNING;
+                Shell_NotifyIconW(NIM_MODIFY, &A.nid);
+            }
+            return 0;
+        }
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;
@@ -127,6 +174,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInst,
     wcscpy_s(A.nid.szInfo, L"Press Ctrl+Shift+D to draw on your screen.");
     A.nid.dwInfoFlags = NIIF_INFO;
     Shell_NotifyIconW(NIM_MODIFY, &A.nid);
+
+    StartUpdateCheck(false);
 
     MSG m;
     while (GetMessageW(&m, nullptr, 0, 0)) {

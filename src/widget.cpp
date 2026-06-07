@@ -25,7 +25,7 @@ struct WidgetLayout {
     float thickCenterX[kThicknessCount] = {};
 
     RECT drag{};
-    RECT tools[4]{};
+    RECT tools[kToolCount]{};
     RECT thicks[kThicknessCount]{};
     RECT swatches[kPaletteCount]{};
     RECT clearBtn{};
@@ -40,7 +40,7 @@ static WidgetLayout ComputeLayout() {
     y += L.dragH;
 
     int x = (L.W - L.toolSize) / 2;
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < kToolCount; ++i) {
         L.tools[i] = {x, y, x + L.toolSize, y + L.toolSize};
         y += L.toolSize + L.gap;
     }
@@ -289,6 +289,33 @@ static void DrawEraserIcon(Graphics& g, RectF r, Color accent, bool selected) {
     g.Restore(st);
 }
 
+static void DrawTextIcon(Graphics& g, RectF r, Color accent, bool selected) {
+    GraphicsState st = g.Save();
+    g.SetTextRenderingHint(TextRenderingHintAntiAlias);
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+
+    REAL cx = r.X + r.Width / 2.0f;
+    REAL cy = r.Y + r.Height / 2.0f;
+
+    Color glyphCol = selected ? accent : Color(255, 235, 235, 240);
+    SolidBrush glyph(glyphCol);
+
+    FontFamily fam(L"Segoe UI");
+    Font font(&fam, 26.0f, FontStyleBold, UnitPixel);
+    StringFormat sf;
+    sf.SetAlignment(StringAlignmentCenter);
+    sf.SetLineAlignment(StringAlignmentCenter);
+    RectF letterBox(r.X - 4.0f, r.Y, r.Width, r.Height);
+    g.DrawString(L"T", -1, &font, letterBox, &sf, &glyph);
+
+    Pen caret(glyphCol, 1.8f);
+    caret.SetStartCap(LineCapRound);
+    caret.SetEndCap(LineCapRound);
+    g.DrawLine(&caret, cx + 9.0f, cy - 9.0f, cx + 9.0f, cy + 9.0f);
+
+    g.Restore(st);
+}
+
 static void PaintWidget(HDC hdc, RECT client) {
     int W = client.right - client.left;
     int H = client.bottom - client.top;
@@ -313,8 +340,10 @@ static void PaintWidget(HDC hdc, RECT client) {
         g.FillEllipse(&dot, cx - 1.5f, cy - 1.5f, 3.0f, 3.0f);
     }
 
-    const Tool tools[4] = { Tool::Pen, Tool::Pencil, Tool::Highlighter, Tool::Eraser };
-    for (int i = 0; i < 4; ++i) {
+    const Tool tools[kToolCount] = {
+        Tool::Pen, Tool::Pencil, Tool::Highlighter, Tool::Eraser, Tool::Text
+    };
+    for (int i = 0; i < kToolCount; ++i) {
         RECT rb = L.tools[i];
         RectF rf((REAL)rb.left, (REAL)rb.top,
                  (REAL)(rb.right - rb.left), (REAL)(rb.bottom - rb.top));
@@ -338,6 +367,7 @@ static void PaintWidget(HDC hdc, RECT client) {
             case Tool::Pencil:      DrawPencilIcon(g, rf, iconAccent, sel); break;
             case Tool::Highlighter: DrawHighlighterIcon(g, rf, iconAccent, sel); break;
             case Tool::Eraser:      DrawEraserIcon(g, rf, iconAccent, sel); break;
+            case Tool::Text:        DrawTextIcon(g, rf, iconAccent, sel); break;
         }
     }
 
@@ -421,10 +451,15 @@ LRESULT CALLBACK WidgetProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_LBUTTONDOWN: {
             POINT p{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             WidgetLayout L = ComputeLayout();
-            const Tool tools[4] = { Tool::Pen, Tool::Pencil, Tool::Highlighter, Tool::Eraser };
-            for (int i = 0; i < 4; ++i) {
+            const Tool tools[kToolCount] = {
+                Tool::Pen, Tool::Pencil, Tool::Highlighter, Tool::Eraser, Tool::Text
+            };
+            for (int i = 0; i < kToolCount; ++i) {
                 if (PtInRect(&L.tools[i], p)) {
-                    A.tool = tools[i];
+                    Tool next = tools[i];
+                    if (A.tool == Tool::Text && next != Tool::Text)
+                        CommitTextEdit();
+                    A.tool = next;
                     InvalidateRect(hwnd, nullptr, FALSE);
                     return 0;
                 }
@@ -433,6 +468,7 @@ LRESULT CALLBACK WidgetProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (PtInRect(&L.thicks[i], p)) {
                     A.thicknessIdx = i;
                     InvalidateRect(hwnd, nullptr, FALSE);
+                    RedrawTextEditIfActive();
                     return 0;
                 }
             }
@@ -440,6 +476,7 @@ LRESULT CALLBACK WidgetProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (PtInRect(&L.swatches[i], p)) {
                     A.paletteIdx = i;
                     InvalidateRect(hwnd, nullptr, FALSE);
+                    RedrawTextEditIfActive();
                     return 0;
                 }
             }

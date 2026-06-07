@@ -16,6 +16,7 @@
 
 #include <gdiplus.h>
 #include <vector>
+#include <string>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -38,12 +39,17 @@ static inline auto imax(A a, B b) -> typename std::common_type<A, B>::type {
 #define min imin
 #define max imax
 
-inline constexpr int    HOTKEY_TOGGLE    = 1;
-inline constexpr int    HOTKEY_UNDO      = 2;
-inline constexpr int    HOTKEY_CLEAR     = 3;
-inline constexpr UINT   WM_TRAYICON      = WM_USER + 1;
-inline constexpr int    ID_TRAY_TOGGLE   = 1001;
-inline constexpr int    ID_TRAY_EXIT     = 1002;
-inline constexpr int    ID_TRAY_SETTINGS = 1003;
+inline constexpr int    HOTKEY_TOGGLE        = 1;
+inline constexpr int    HOTKEY_UNDO          = 2;
+inline constexpr int    HOTKEY_CLEAR         = 3;
+inline constexpr UINT   WM_TRAYICON          = WM_USER + 1;
+inline constexpr UINT   WM_UPDATE_RESULT     = WM_USER + 10;
+inline constexpr int    ID_TRAY_TOGGLE       = 1001;
+inline constexpr int    ID_TRAY_EXIT         = 1002;
+inline constexpr int    ID_TRAY_SETTINGS     = 1003;
+inline constexpr int    ID_TRAY_UPDATE       = 1004;
+inline constexpr int    ID_TRAY_CHECK_UPDATE = 1005;
 
-inline constexpr size_t kHistoryByteBudget = 12 * 1024 * 1024;
+inline constexpr size_t  kHistoryByteBudget   = 12 * 1024 * 1024;
+inline constexpr size_t  kTextBoxByteBudget   = 2  * 1024 * 1024;
+inline constexpr wchar_t kAppVersion[]        = L"1.2.0";

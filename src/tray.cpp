@@ -1,5 +1,6 @@
 #include "tray.h"
 #include "state.h"
+#include "updater.h"
 
 HICON LoadAppIcon(int size) {
     HICON h = (HICON)LoadImageW(A.hInst, MAKEINTRESOURCEW(IDI_APP),
@@ -34,6 +35,15 @@ void ShowTrayMenu() {
                 A.active ? L"Stop drawing" : L"Start drawing\tCtrl+Shift+D");
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(m, MF_STRING, ID_TRAY_SETTINGS, L"Settings…");
+    if (IsUpdateAvailable()) {
+        wchar_t label[128];
+        _snwprintf_s(label, ARRAYSIZE(label), _TRUNCATE,
+                     L"Install update %s", LatestVersionTag());
+        AppendMenuW(m, MF_STRING, ID_TRAY_UPDATE, label);
+    } else {
+        AppendMenuW(m, MF_STRING, ID_TRAY_CHECK_UPDATE,
+                    L"Check for updates");
+    }
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(m, MF_STRING, ID_TRAY_EXIT, L"Quit ScreenDoodle");
     SetForegroundWindow(A.msgWnd);

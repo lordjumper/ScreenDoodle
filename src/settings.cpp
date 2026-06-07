@@ -1,6 +1,10 @@
 #include "settings.h"
 #include "state.h"
 #include "tray.h"
+#include "updater.h"
+
+#define IDC_CHECK_UPDATE 2003
+#define IDC_VERSION_LBL  2004
 
 static const wchar_t kRunKey[]   = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 static const wchar_t kRunValue[] = L"ScreenDoodle";
@@ -69,9 +73,24 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 hwnd, (HMENU)(INT_PTR)IDC_HOTKEYINFO, A.hInst, nullptr);
             SendMessageW(info, WM_SETFONT, (WPARAM)font, TRUE);
 
+            wchar_t verStr[64];
+            _snwprintf_s(verStr, ARRAYSIZE(verStr), _TRUNCATE,
+                         L"Version %s", kAppVersion);
+            HWND ver = CreateWindowExW(0, L"STATIC", verStr,
+                WS_CHILD | WS_VISIBLE,
+                24, 170, 180, 18,
+                hwnd, (HMENU)(INT_PTR)IDC_VERSION_LBL, A.hInst, nullptr);
+            SendMessageW(ver, WM_SETFONT, (WPARAM)font, TRUE);
+
+            HWND check = CreateWindowExW(0, L"BUTTON", L"Check for updates",
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                180, 167, 120, 26,
+                hwnd, (HMENU)(INT_PTR)IDC_CHECK_UPDATE, A.hInst, nullptr);
+            SendMessageW(check, WM_SETFONT, (WPARAM)font, TRUE);
+
             HWND done = CreateWindowExW(0, L"BUTTON", L"Done",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-                300, 170, 96, 28,
+                306, 167, 90, 26,
                 hwnd, (HMENU)(INT_PTR)IDOK, A.hInst, nullptr);
             SendMessageW(done, WM_SETFONT, (WPARAM)font, TRUE);
 
@@ -97,6 +116,9 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     }
                     return 0;
                 }
+                case IDC_CHECK_UPDATE:
+                    StartUpdateCheck(true);
+                    return 0;
                 case IDOK:
                 case IDCANCEL:
                     DestroyWindow(hwnd);

@@ -19,6 +19,7 @@ add_executable(ScreenDoodle WIN32
     src/widget.cpp
     src/settings.cpp
     src/tray.cpp
+    src/updater.cpp
     resources/app.rc
 )
 
@@ -54,4 +55,5 @@ target_link_libraries(ScreenDoodle PRIVATE
     msimg32
     ole32
     advapi32
+    winhttp
 )

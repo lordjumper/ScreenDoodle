@@ -2,7 +2,9 @@
 
 #include "common.h"
 
-enum class Tool { Pen, Pencil, Highlighter, Eraser };
+enum class Tool { Pen, Pencil, Highlighter, Eraser, Text };
+inline constexpr int kToolCount = 5;
+
 enum class SideAnchor { Left, Right };
 
 struct Swatch { BYTE r, g, b; };
@@ -24,6 +26,29 @@ inline constexpr int kPaletteCount =
 inline constexpr int kThickness[] = {2, 4, 7, 12, 18};
 inline constexpr int kThicknessCount =
     (int)(sizeof(kThickness) / sizeof(kThickness[0]));
+
+inline constexpr int kTextSize[]  = {16, 22, 30, 42, 58};
+
+struct TextEditState {
+    bool         active = false;
+    bool         dragging = false;
+    POINT        origin{0, 0};
+    POINT        dragOffset{0, 0};
+    std::wstring buffer;
+    RECT         lastRect{0, 0, 0, 0};
+    bool         caretVisible = true;
+    UINT_PTR     caretTimer = 0;
+};
+
+struct PlacedTextBox {
+    std::wstring          text;
+    POINT                 origin{0, 0};
+    int                   sizeIdx = 0;
+    int                   colorIdx = 0;
+    RECT                  bounds{0, 0, 0, 0};
+    std::vector<uint32_t> backdrop;
+    RECT                  backdropRect{0, 0, 0, 0};
+};
 
 struct AppState {
     Tool tool = Tool::Pen;
@@ -64,8 +89,13 @@ struct AppState {
     ULONG_PTR gdiToken = 0;
 
     int wgW = 0, wgH = 0;
+
+    TextEditState text;
+    std::vector<PlacedTextBox> textBoxes;
+    static constexpr size_t kMaxTextBoxes = 32;
 };
 
 extern AppState A;
 
 inline int currentThickness() { return kThickness[A.thicknessIdx]; }
+inline int currentTextSize()  { return kTextSize[A.thicknessIdx]; }
