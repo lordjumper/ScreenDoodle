@@ -1,5 +1,5 @@
 #define MyAppName       "ScreenDoodle"
-#define MyAppVersion    "1.2.0"
+#define MyAppVersion    "1.2.1"
 #define MyAppPublisher  "lordjumper"
 #define MyAppURL        "https://github.com/lordjumper/ScreenDoodle"
 #define MyAppExeName    "ScreenDoodle.exe"

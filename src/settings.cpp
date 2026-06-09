@@ -64,7 +64,7 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
             HWND info = CreateWindowExW(0, L"STATIC",
                 L"Hotkeys:\n"
-                L"  Ctrl+Shift+D  —  Toggle drawing mode\n"
+                L"  Ctrl+Alt+D    —  Toggle drawing mode\n"
                 L"  Ctrl+Shift+Z  —  Undo last stroke\n"
                 L"  Ctrl+Shift+X  —  Clear canvas\n"
                 L"  Esc           —  Exit drawing mode",

@@ -18,7 +18,7 @@ void CreateTrayIcon() {
     A.nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     A.nid.uCallbackMessage = WM_TRAYICON;
     A.nid.hIcon = LoadAppIcon(GetSystemMetrics(SM_CXSMICON));
-    wcscpy_s(A.nid.szTip, L"ScreenDoodle - Ctrl+Shift+D to draw");
+    wcscpy_s(A.nid.szTip, L"ScreenDoodle - Ctrl+Alt+D to draw");
     Shell_NotifyIconW(NIM_ADD, &A.nid);
 }
 
@@ -32,7 +32,7 @@ void ShowTrayMenu() {
     GetCursorPos(&pt);
     HMENU m = CreatePopupMenu();
     AppendMenuW(m, MF_STRING, ID_TRAY_TOGGLE,
-                A.active ? L"Stop drawing" : L"Start drawing\tCtrl+Shift+D");
+                A.active ? L"Stop drawing" : L"Start drawing\tCtrl+Alt+D");
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(m, MF_STRING, ID_TRAY_SETTINGS, L"Settings…");
     if (IsUpdateAvailable()) {

@@ -163,7 +163,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInst,
     CreateTrayIcon();
 
     RegisterHotKey(A.msgWnd, HOTKEY_TOGGLE,
-                   MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, 'D');
+                   MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'D');
     RegisterHotKey(A.msgWnd, HOTKEY_UNDO,
                    MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, 'Z');
     RegisterHotKey(A.msgWnd, HOTKEY_CLEAR,
@@ -171,7 +171,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInst,
 
     A.nid.uFlags = NIF_INFO;
     wcscpy_s(A.nid.szInfoTitle, L"ScreenDoodle is running");
-    wcscpy_s(A.nid.szInfo, L"Press Ctrl+Shift+D to draw on your screen.");
+    wcscpy_s(A.nid.szInfo, L"Press Ctrl+Alt+D to draw on your screen.");
     A.nid.dwInfoFlags = NIIF_INFO;
     Shell_NotifyIconW(NIM_MODIFY, &A.nid);
 
