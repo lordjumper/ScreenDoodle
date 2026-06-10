@@ -586,10 +586,17 @@ static void MeasureText(const std::wstring& text, float fontSize,
     outH = multiH > expected ? multiH : expected;
 }
 
+static float LineHeightPxOf(float fontSize) {
+    FontFamily fam(L"Segoe UI");
+    UINT16 em = fam.GetEmHeight(FontStyleBold);
+    UINT16 ls = fam.GetLineSpacing(FontStyleBold);
+    if (em == 0 || ls == 0) return fontSize;
+    float h = fontSize * (float)ls / (float)em;
+    return h > 1.0f ? h : 1.0f;
+}
+
 static int LineHeightOf(float fontSize) {
-    int w = 0, h = 0;
-    MeasureText(std::wstring(), fontSize, w, h);
-    return h;
+    return (int)ceilf(LineHeightPxOf(fontSize));
 }
 
 static void StampText(const std::wstring& text, int destX, int destY,
@@ -732,7 +739,8 @@ static void RedrawTextEdit() {
     int textW = 0, textH = 0;
     MeasureText(A.text.buffer, fontSize, textW, textH);
 
-    int lineH     = LineHeightOf(fontSize);
+    float lineHpx = LineHeightPxOf(fontSize);
+    int lineH     = (int)ceilf(lineHpx);
     int lineCount = CountLines(A.text.buffer);
 
     size_t lastBreak = A.text.buffer.find_last_of(L'\n');
@@ -752,7 +760,7 @@ static void RedrawTextEdit() {
 
     int caretGap = max(1, (int)(fontSize * 0.05f));
     int caretX   = oxLocal + lastLineW + caretGap;
-    int caretY   = oyLocal + (lineCount - 1) * lineH;
+    int caretY   = oyLocal + (int)lroundf((lineCount - 1) * lineHpx);
     int caretW   = max(1, (int)(fontSize / 18.0f));
 
     RECT caretRect{0, 0, 0, 0};
@@ -762,7 +770,8 @@ static void RedrawTextEdit() {
 
     int framePad = max(4, (int)(fontSize * 0.18f));
     int contentRight  = max(oxLocal + textW, caretX + caretW);
-    int contentBottom = oyLocal + max(textH, lineCount * lineH);
+    int stackedH      = (int)lroundf(lineCount * lineHpx);
+    int contentBottom = oyLocal + stackedH;
     RECT frameTarget{
         oxLocal - framePad,
         oyLocal - framePad,
@@ -884,6 +893,18 @@ void RedrawTextEditIfActive() {
         A.text.caretVisible = true;
         RedrawTextEdit();
     }
+}
+
+static bool TextInputPending() {
+    MSG m;
+    if (PeekMessageW(&m, nullptr, WM_CHAR, WM_CHAR, PM_NOREMOVE)) return true;
+    if (PeekMessageW(&m, nullptr, WM_KEYDOWN, WM_KEYDOWN, PM_NOREMOVE)) {
+        WPARAM k = m.wParam;
+        if (k == VK_RETURN || k == VK_BACK || k == VK_TAB
+            || (k >= 0x20 && k != VK_DELETE && k != VK_ESCAPE))
+            return true;
+    }
+    return false;
 }
 
 static void RestoreBoxBackdrop(const PlacedTextBox& box) {
@@ -1076,20 +1097,22 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_CHAR: {
             if (!A.text.active) return 0;
             wchar_t ch = (wchar_t)wp;
+            bool changed = false;
             if (ch == 0x08) {
                 if (!A.text.buffer.empty()) {
                     A.text.buffer.pop_back();
-                    A.text.caretVisible = true;
-                    RedrawTextEditIfActive();
+                    changed = true;
                 }
             } else if (ch == 0x09) {
                 A.text.buffer.append(L"    ");
-                A.text.caretVisible = true;
-                RedrawTextEditIfActive();
+                changed = true;
             } else if (ch >= 0x20 && ch != 0x7F) {
                 A.text.buffer.push_back(ch);
+                changed = true;
+            }
+            if (changed) {
                 A.text.caretVisible = true;
-                RedrawTextEditIfActive();
+                if (!TextInputPending()) RedrawTextEditIfActive();
             }
             return 0;
         }
@@ -1110,7 +1133,7 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (wp == VK_RETURN) {
                     A.text.buffer.push_back(L'\n');
                     A.text.caretVisible = true;
-                    RedrawTextEditIfActive();
+                    if (!TextInputPending()) RedrawTextEditIfActive();
                     return 0;
                 }
                 if (wp == VK_DELETE) {
