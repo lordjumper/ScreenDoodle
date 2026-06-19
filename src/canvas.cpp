@@ -442,14 +442,23 @@ static void ClearStrokeCoverageRect(RECT r) {
     }
 }
 
+static void DrawSegmentF(float aXs, float aYs, float bXs, float bYs);
+
 void StartStroke(POINT screenPt) {
     A.drawing = true;
     A.lastPt = screenPt;
+    A.lastMidX = (float)screenPt.x;
+    A.lastMidY = (float)screenPt.y;
     A.strokeDirty = {INT_MAX, INT_MAX, INT_MIN, INT_MIN};
     DrawSegment(screenPt, screenPt);
 }
 
 void EndStroke() {
+    // The smoothed marker trails the cursor by half a sample, so finish the
+    // line by connecting the last midpoint to the actual release point.
+    if (A.drawing && A.tool == Tool::Pen)
+        DrawSegmentF(A.lastMidX, A.lastMidY, (float)A.lastPt.x, (float)A.lastPt.y);
+
     if (A.drawing
         && A.strokeDirty.right > A.strokeDirty.left
         && A.strokeDirty.bottom > A.strokeDirty.top) {
@@ -460,11 +469,13 @@ void EndStroke() {
     A.drawing = false;
 }
 
-void DrawSegment(POINT a, POINT b) {
+// Coordinates are screen-space floats so the smoothed marker can be rendered at
+// subpixel precision (whole-pixel endpoints make the antialiased edge wobble).
+static void StampSegment(float aXs, float aYs, float bXs, float bYs, RECT& dirty) {
     if (!A.drawBits) return;
 
-    int ax = a.x - A.sx, ay = a.y - A.sy;
-    int bx = b.x - A.sx, by = b.y - A.sy;
+    float ax = aXs - A.sx, ay = aYs - A.sy;
+    float bx = bXs - A.sx, by = bYs - A.sy;
 
     float w = (float)currentThickness();
     BYTE  alpha = 255;
@@ -499,10 +510,9 @@ void DrawSegment(POINT a, POINT b) {
         const Swatch& s = kPalette[A.paletteIdx];
         float radius = w * 0.5f;
         if (A.tool == Tool::Pen) {
-            StampCapsule((float)ax, (float)ay, (float)bx, (float)by,
-                         radius, s.r, s.g, s.b);
+            StampCapsule(ax, ay, bx, by, radius, s.r, s.g, s.b);
         } else {
-            float dx = (float)(bx - ax), dy = (float)(by - ay);
+            float dx = bx - ax, dy = by - ay;
             float dist = sqrtf(dx*dx + dy*dy);
             int steps = max(1, (int)ceilf(dist));
             for (int i = 0; i <= steps; ++i) {
@@ -522,10 +532,10 @@ void DrawSegment(POINT a, POINT b) {
 
     int pad = (int)(w * 0.5f) + 3;
     RECT seg{
-        min(ax, bx) - pad,
-        min(ay, by) - pad,
-        max(ax, bx) + pad,
-        max(ay, by) + pad
+        (LONG)floorf(min(ax, bx)) - pad,
+        (LONG)floorf(min(ay, by)) - pad,
+        (LONG)ceilf (max(ax, bx)) + pad,
+        (LONG)ceilf (max(ay, by)) + pad
     };
     seg.left   = max(seg.left,   (LONG)0);
     seg.top    = max(seg.top,    (LONG)0);
@@ -537,7 +547,48 @@ void DrawSegment(POINT a, POINT b) {
     if (seg.right  > A.strokeDirty.right ) A.strokeDirty.right  = seg.right;
     if (seg.bottom > A.strokeDirty.bottom) A.strokeDirty.bottom = seg.bottom;
 
-    UpdateOverlay(&seg);
+    if (seg.left   < dirty.left  ) dirty.left   = seg.left;
+    if (seg.top    < dirty.top   ) dirty.top    = seg.top;
+    if (seg.right  > dirty.right ) dirty.right  = seg.right;
+    if (seg.bottom > dirty.bottom) dirty.bottom = seg.bottom;
+}
+
+static void DrawSegmentF(float aXs, float aYs, float bXs, float bYs) {
+    RECT dirty{INT_MAX, INT_MAX, INT_MIN, INT_MIN};
+    StampSegment(aXs, aYs, bXs, bYs, dirty);
+    if (dirty.right > dirty.left) UpdateOverlay(&dirty);
+}
+
+void DrawSegment(POINT a, POINT b) {
+    DrawSegmentF((float)a.x, (float)a.y, (float)b.x, (float)b.y);
+}
+
+// Marker smoothing: draw a quadratic curve that passes through the midpoint of
+// each pair of samples, using the raw sample as the control point. Kept in
+// floating point so the antialiased edge stays steady instead of wobbling.
+void DrawSmoothStep(POINT newPt) {
+    float midX = (A.lastPt.x + newPt.x) * 0.5f;
+    float midY = (A.lastPt.y + newPt.y) * 0.5f;
+    float p0x = A.lastMidX, p0y = A.lastMidY;
+    float p1x = (float)A.lastPt.x, p1y = (float)A.lastPt.y;
+    float p2x = midX, p2y = midY;
+
+    float dx = p2x - p0x, dy = p2y - p0y;
+    int steps = max(1, (int)(sqrtf(dx*dx + dy*dy) / 3.0f));
+
+    RECT dirty{INT_MAX, INT_MAX, INT_MIN, INT_MIN};
+    float prevX = p0x, prevY = p0y;
+    for (int i = 1; i <= steps; ++i) {
+        float t = (float)i / (float)steps, u = 1.0f - t;
+        float curX = u*u*p0x + 2*u*t*p1x + t*t*p2x;
+        float curY = u*u*p0y + 2*u*t*p1y + t*t*p2y;
+        StampSegment(prevX, prevY, curX, curY, dirty);
+        prevX = curX; prevY = curY;
+    }
+    if (dirty.right > dirty.left) UpdateOverlay(&dirty);
+
+    A.lastMidX = midX; A.lastMidY = midY;
+    A.lastPt = newPt;
 }
 
 static void BuildTextFormat(StringFormat& sf) {
@@ -1060,8 +1111,12 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             POINT screenPoint;
             screenPoint.x = GET_X_LPARAM(lp) + A.sx;
             screenPoint.y = GET_Y_LPARAM(lp) + A.sy;
-            DrawSegment(A.lastPt, screenPoint);
-            A.lastPt = screenPoint;
+            if (A.tool == Tool::Pen) {
+                DrawSmoothStep(screenPoint);
+            } else {
+                DrawSegment(A.lastPt, screenPoint);
+                A.lastPt = screenPoint;
+            }
             return 0;
         }
         case WM_LBUTTONUP: {

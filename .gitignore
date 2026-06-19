@@ -4,6 +4,7 @@ out/
 cmake-build-*/
 bin/
 obj/
+build-*/
 
 # --- Installer output ---
 installer/dist/

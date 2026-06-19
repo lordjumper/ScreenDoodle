@@ -76,6 +76,7 @@ struct AppState {
     uint8_t*  strokeCov = nullptr;
 
     POINT lastPt{0, 0};
+    float lastMidX = 0.0f, lastMidY = 0.0f;
     RECT  strokeDirty{0, 0, 0, 0};
 
     struct UndoEntry {

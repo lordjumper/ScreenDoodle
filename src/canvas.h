@@ -8,6 +8,7 @@ void ClearCanvas();
 void Undo();
 void UpdateOverlay(const RECT* dirty);
 void DrawSegment(POINT a, POINT b);
+void DrawSmoothStep(POINT newPt);
 void StartStroke(POINT screenPt);
 void EndStroke();
 void ActivateOverlay();

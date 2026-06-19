@@ -52,4 +52,4 @@ inline constexpr int    ID_TRAY_CHECK_UPDATE = 1005;
 
 inline constexpr size_t  kHistoryByteBudget   = 12 * 1024 * 1024;
 inline constexpr size_t  kTextBoxByteBudget   = 2  * 1024 * 1024;
-inline constexpr wchar_t kAppVersion[]        = L"1.2.2";
+inline constexpr wchar_t kAppVersion[]        = L"1.2.3";
