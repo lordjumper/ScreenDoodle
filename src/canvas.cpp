@@ -470,7 +470,7 @@ void EndStroke() {
 }
 
 // Coordinates are screen-space floats so the smoothed marker can be rendered at
-// subpixel precision (whole-pixel endpoints make the antialiased edge wobble).
+// subpixel precision (whole-pixel endpoints make the antialiased edge wobble)
 static void StampSegment(float aXs, float aYs, float bXs, float bYs, RECT& dirty) {
     if (!A.drawBits) return;
 
@@ -507,7 +507,7 @@ static void StampSegment(float aXs, float aYs, float bXs, float bYs, RECT& dirty
     }
 
     {
-        const Swatch& s = kPalette[A.paletteIdx];
+        const Swatch& s = A.color;
         float radius = w * 0.5f;
         if (A.tool == Tool::Pen) {
             StampCapsule(ax, ay, bx, by, radius, s.r, s.g, s.b);
@@ -765,7 +765,7 @@ static void StampCaret(int x, int y, int height, RECT& outRect) {
     int x1 = min(x + barW, A.sw);
     int y1 = min(y + height, A.sh);
     if (x0 >= x1 || y0 >= y1) return;
-    const Swatch& s = kPalette[A.paletteIdx];
+    const Swatch& s = A.color;
     uint32_t pix = (255u << 24) | ((uint32_t)s.r << 16)
                  | ((uint32_t)s.g << 8) | (uint32_t)s.b;
     for (int yy = y0; yy < y1; ++yy) {
@@ -785,7 +785,7 @@ static void RedrawTextEdit() {
     int oxLocal = A.text.origin.x - A.sx;
     int oyLocal = A.text.origin.y - A.sy;
     float fontSize = (float)currentTextSize();
-    const Swatch& s = kPalette[A.paletteIdx];
+    const Swatch& s = A.color;
 
     int textW = 0, textH = 0;
     MeasureText(A.text.buffer, fontSize, textW, textH);
@@ -883,7 +883,7 @@ void CommitTextEdit() {
         int oxLocal = A.text.origin.x - A.sx;
         int oyLocal = A.text.origin.y - A.sy;
         float fontSize = (float)currentTextSize();
-        const Swatch& s = kPalette[A.paletteIdx];
+        const Swatch& s = A.color;
         StampText(A.text.buffer, oxLocal, oyLocal, fontSize,
                   s.r, s.g, s.b, textRect);
         if (!RectEmpty(textRect)) {
@@ -894,7 +894,7 @@ void CommitTextEdit() {
             box.text     = A.text.buffer;
             box.origin   = A.text.origin;
             box.sizeIdx  = A.thicknessIdx;
-            box.colorIdx = A.paletteIdx;
+            box.color    = A.color;
             box.bounds   = textRect;
             box.backdropRect = textRect;
             box.backdrop.resize((size_t)bw * bh);
@@ -1002,7 +1002,7 @@ bool TryPickUpTextBox(POINT localPt) {
         UpdateOverlay(&box.backdropRect);
 
         A.thicknessIdx = box.sizeIdx;
-        A.paletteIdx   = box.colorIdx;
+        SetPickerRGB(box.color);
         if (A.widget) InvalidateRect(A.widget, nullptr, FALSE);
 
         BeginTextEdit(box.origin, &box.text);
