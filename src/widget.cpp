@@ -481,13 +481,28 @@ static void DrawBrightnessBar(Graphics& g, RECT rc, float s) {
                              LinearGradientModeHorizontal);
     FillRoundRect(g, grad, rf, rad);
 
-    float hx = rf.X + A.val * rf.Width;
     float hr = rf.Height / 2.0f + 1.5f * s;
+    // Inset the thumb travel by its radius so it never spills past the
+    // widget edge (which would clip it against the window border).
+    float travel = max(0.0f, rf.Width - 2.0f * hr);
+    float hx = rf.X + hr + A.val * travel;
     float hy = rf.Y + rf.Height / 2.0f;
     SolidBrush thumbFill(curCol(255));
     g.FillEllipse(&thumbFill, hx - hr, hy - hr, hr * 2, hr * 2);
     Pen thumbRing(Color(255, 255, 255, 255), 1.6f * s);
     g.DrawEllipse(&thumbRing, hx - hr, hy - hr, hr * 2, hr * 2);
+}
+
+static float BrightnessValueFromX(const WidgetLayout& L, int px) {
+    float bh     = (float)(L.bright.bottom - L.bright.top);
+    float hr     = bh / 2.0f + 1.5f * L.scale;
+    float travel = (float)(L.bright.right - L.bright.left) - 2.0f * hr;
+    float v = (travel > 0.0f)
+              ? ((float)px - (float)L.bright.left - hr) / travel
+              : 0.0f;
+    if (v < 0.0f) v = 0.0f;
+    if (v > 1.0f) v = 1.0f;
+    return v;
 }
 
 static void PaintWidget(HDC hdc, RECT client) {
@@ -598,6 +613,8 @@ static void PickFromWheel(const WidgetLayout& L, POINT p) {
 }
 
 LRESULT CALLBACK WidgetProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    enum class Drag { None, Wheel, Bright };
+    static Drag drag = Drag::None;
     switch (msg) {
         case WM_MOUSEACTIVATE:
             return MA_NOACTIVATE;
@@ -640,17 +657,22 @@ LRESULT CALLBACK WidgetProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 }
             }
             if (PtInRect(&L.wheel, p)) {
+                drag = Drag::Wheel;
                 PickFromWheel(L, p);
                 SetCapture(hwnd);
                 InvalidateRect(hwnd, nullptr, FALSE);
                 RedrawTextEditIfActive();
                 return 0;
             }
-            if (PtInRect(&L.bright, p)) {
-                float w = (float)(L.bright.right - L.bright.left);
-                float v = (w > 0.0f) ? (p.x - L.bright.left) / w : 0.0f;
-                if (v < 0.0f) v = 0.0f; if (v > 1.0f) v = 1.0f;
-                SetPickerHSV(A.hue, A.sat, v);
+            // Enlarge the brightness bar's grab area vertically so it is easy
+            // to catch; the bar itself is only a few pixels tall.
+            RECT brightHit = L.bright;
+            int  bvpad = R(7.0f * L.scale);
+            brightHit.top    -= bvpad;
+            brightHit.bottom += bvpad;
+            if (PtInRect(&brightHit, p)) {
+                drag = Drag::Bright;
+                SetPickerHSV(A.hue, A.sat, BrightnessValueFromX(L, p.x));
                 SetCapture(hwnd);
                 InvalidateRect(hwnd, nullptr, FALSE);
                 RedrawTextEditIfActive();
@@ -670,20 +692,18 @@ LRESULT CALLBACK WidgetProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (GetCapture() != hwnd) return 0;
             POINT p{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
             WidgetLayout L = ComputeLayout();
-            float w = (float)(L.bright.right - L.bright.left);
-            // Decide which control we're dragging by vertical position
-            if (p.y < L.bright.top) {
+            // Stick with whichever control the drag started on.
+            if (drag == Drag::Wheel) {
                 PickFromWheel(L, p);
             } else {
-                float v = (w > 0.0f) ? (p.x - L.bright.left) / w : 0.0f;
-                if (v < 0.0f) v = 0.0f; if (v > 1.0f) v = 1.0f;
-                SetPickerHSV(A.hue, A.sat, v);
+                SetPickerHSV(A.hue, A.sat, BrightnessValueFromX(L, p.x));
             }
             InvalidateRect(hwnd, nullptr, FALSE);
             RedrawTextEditIfActive();
             return 0;
         }
         case WM_LBUTTONUP:
+            drag = Drag::None;
             if (GetCapture() == hwnd) ReleaseCapture();
             return 0;
         case WM_PAINT: {
