@@ -482,8 +482,6 @@ static void DrawBrightnessBar(Graphics& g, RECT rc, float s) {
     FillRoundRect(g, grad, rf, rad);
 
     float hr = rf.Height / 2.0f + 1.5f * s;
-    // Inset the thumb travel by its radius so it never spills past the
-    // widget edge (which would clip it against the window border).
     float travel = max(0.0f, rf.Width - 2.0f * hr);
     float hx = rf.X + hr + A.val * travel;
     float hy = rf.Y + rf.Height / 2.0f;
@@ -664,8 +662,6 @@ LRESULT CALLBACK WidgetProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 RedrawTextEditIfActive();
                 return 0;
             }
-            // Enlarge the brightness bar's grab area vertically so it is easy
-            // to catch; the bar itself is only a few pixels tall.
             RECT brightHit = L.bright;
             int  bvpad = R(7.0f * L.scale);
             brightHit.top    -= bvpad;
