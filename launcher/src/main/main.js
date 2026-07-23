@@ -127,7 +127,9 @@ ipcMain.on('win:close', () => win && win.close());
 
 handle('app:state', async () => {
   const inst = await installer.detect();
+  const legacy = P.isPortable() ? await installer.detectLegacy() : { found: false };
   return {
+    legacy,
     version: overlay.currentVersion(),
     overlayAvailable: overlay.isAvailable(),
     overlayPath: overlay.exePath(),

@@ -115,6 +115,14 @@ function renderMode() {
     if (!$('#installDir').value) {
       $('#installDir').value = s.installDir || s.defaultInstallDir;
     }
+
+    const old = s.legacy;
+    $('#legacyNote').hidden = !(old && old.found);
+    if (old && old.found) {
+      $('#legacyNote').textContent =
+        `ScreenDoodle ${old.version || ''} is already installed at ${old.dir}. ` +
+        'It will be removed first, so you are left with a single copy.';
+    }
     setCta('#btnInstall', '#installIcon', '#installLabel', 'download',
            upgrade ? 'Update' : 'Install', false);
   }

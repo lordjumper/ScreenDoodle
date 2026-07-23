@@ -106,16 +106,97 @@ function makeShortcut(linkPath, target, icon) {
   }
 }
 
-function killLauncherIn(dir) {
+function killProcessesIn(dir) {
   const target = dir.replace(/'/g, "''");
   const ps =
-    "Get-Process -Name 'ScreenDoodle' -ErrorAction SilentlyContinue | " +
-    `Where-Object { $_.Path -and $_.Path.StartsWith('${target}') } | ` +
+    "Get-Process -ErrorAction SilentlyContinue | " +
+    "Where-Object { $_.Name -like 'ScreenDoodle*' -and $_.Path -and " +
+    `$_.Path.StartsWith('${target}') } | ` +
     'Stop-Process -Force -ErrorAction SilentlyContinue';
   return new Promise((resolve) =>
     execFile('powershell',
       ['-NoProfile', '-NonInteractive', '-Command', ps],
       { windowsHide: true }, () => resolve()));
+}
+
+const LEGACY_ID = '{8E7B4F12-2DCE-4A19-9B14-9F1FCE4D6C57}_is1';
+const LEGACY_KEYS = [
+  `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${LEGACY_ID}`,
+  `HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${LEGACY_ID}`
+];
+
+async function detectLegacy() {
+  for (const key of LEGACY_KEYS) {
+    const out = await reg(['query', key]);
+    if (!out) continue;
+    const loc = /InstallLocation\s+REG_SZ\s+(.+)/i.exec(out);
+    const ver = /DisplayVersion\s+REG_SZ\s+(.+)/i.exec(out);
+    const uni = /UninstallString\s+REG_SZ\s+(.+)/i.exec(out);
+    const dir = loc ? loc[1].trim().replace(/\\+$/, '') : null;
+    if (!dir) continue;
+    return {
+      found: true,
+      key,
+      dir,
+      version: ver ? ver[1].trim() : null,
+      uninstaller: uni ? uni[1].trim().replace(/^"(.*)"$/, '$1') : null,
+      perMachine: key.startsWith('HKLM')
+    };
+  }
+  return { found: false };
+}
+
+function exists(p) {
+  try { return fs.existsSync(p); } catch (_) { return false; }
+}
+
+async function removeLegacy(emit) {
+  const old = await detectLegacy();
+  if (!old.found) return { removed: false };
+
+  emit('status', {
+    phase: 'legacy',
+    text: `Removing ScreenDoodle ${old.version || 'legacy'}…`
+  });
+
+  await killProcessesIn(old.dir);
+
+  if (old.uninstaller && exists(old.uninstaller)) {
+    await new Promise((resolve) =>
+      execFile(old.uninstaller,
+        ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'],
+        { windowsHide: true, timeout: 120000 }, () => resolve()));
+
+    for (let i = 0; i < 20 && exists(old.dir); i++) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+
+  // The Inno uninstaller leaves its own files behind while running, and an
+  // elevated per-machine install may refuse us entirely. Clear whatever is
+  // left. This runs before anything is copied, so wiping the folder is safe
+  // even when it is also the new install target — the new files land in a
+  // clean directory instead of mixing with the old version's leftovers.
+  if (exists(old.dir)) {
+    try { fs.rmSync(old.dir, { recursive: true, force: true }); } catch (_) {}
+  }
+
+  await reg(['delete', old.key, '/f']);
+
+  // Autostart pointing at the removed copy would silently fail at every login.
+  const run = await reg(['query',
+    'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', '/v', 'ScreenDoodle']);
+  if (run && run.toLowerCase().includes(old.dir.toLowerCase())) {
+    await reg(['delete',
+      'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', '/v', 'ScreenDoodle', '/f']);
+  }
+
+  return {
+    removed: true,
+    version: old.version,
+    dir: old.dir,
+    leftBehind: exists(old.dir)
+  };
 }
 
 async function install(opts, emit) {
@@ -135,8 +216,10 @@ async function install(opts, emit) {
 
   await new Promise((r) =>
     execFile('taskkill', ['/IM', P.overlayExeName, '/F'], { windowsHide: true }, () => r()));
-  await killLauncherIn(dir);
+  await killProcessesIn(dir);
   await new Promise((r) => setTimeout(r, 700));
+
+  const legacy = await removeLegacy(emit);
 
   fs.mkdirSync(dir, { recursive: true });
 
@@ -186,7 +269,7 @@ async function install(opts, emit) {
   await set('URLInfoAbout', 'REG_SZ', 'https://github.com/lordjumper/ScreenDoodle');
 
   emit('status', { phase: 'done', text: 'Installed' });
-  return { installed: true, installDir: dir, exePath: exe, files: count };
+  return { installed: true, installDir: dir, exePath: exe, files: count, legacy };
 }
 
 async function uninstall(installDir) {
@@ -226,6 +309,8 @@ async function uninstall(installDir) {
 
 module.exports = {
   detect,
+  detectLegacy,
+  removeLegacy,
   runningInstalled,
   install,
   uninstall,
