@@ -49,7 +49,9 @@ inline constexpr int    ID_TRAY_EXIT         = 1002;
 inline constexpr int    ID_TRAY_SETTINGS     = 1003;
 inline constexpr int    ID_TRAY_UPDATE       = 1004;
 inline constexpr int    ID_TRAY_CHECK_UPDATE = 1005;
+inline constexpr int    ID_TRAY_LAUNCHER     = 1006;
+inline constexpr int    ID_TRAY_LAUNCHER_SET = 1007;
 
 inline constexpr size_t  kHistoryByteBudget   = 12 * 1024 * 1024;
 inline constexpr size_t  kTextBoxByteBudget   = 2  * 1024 * 1024;
-inline constexpr wchar_t kAppVersion[]        = L"1.3.4";
+inline constexpr wchar_t kAppVersion[]        = L"1.4.4";

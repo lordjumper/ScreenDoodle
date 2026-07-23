@@ -18,10 +18,13 @@ add_executable(ScreenDoodle WIN32
     src/canvas.cpp
     src/widget.cpp
     src/settings.cpp
+    src/config.cpp
     src/tray.cpp
     src/updater.cpp
     resources/app.rc
 )
+
+set_target_properties(ScreenDoodle PROPERTIES OUTPUT_NAME "ScreenDoodleOverlay")
 
 target_include_directories(ScreenDoodle PRIVATE src resources)
 

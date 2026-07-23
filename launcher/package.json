@@ -1,0 +1,56 @@
+{
+  "name": "screendoodle",
+  "productName": "ScreenDoodle",
+  "version": "1.4.4",
+  "description": "ScreenDoodle — lightweight on-screen drawing, with its launcher.",
+  "author": "lordjumper",
+  "license": "MIT",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:overlay": "cmake -S .. -B ../build && cmake --build ../build --config Release",
+    "dist": "npm run build:overlay && electron-builder --win --x64",
+    "pack": "npm run build:overlay && electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^32.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.lordjumper.screendoodle",
+    "productName": "ScreenDoodle",
+    "extraMetadata": {
+      "description": "ScreenDoodle"
+    },
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../build/Release/ScreenDoodleOverlay.exe",
+        "to": "overlay/ScreenDoodleOverlay.exe"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/ScreenDoodle.ico",
+      "executableName": "ScreenDoodle",
+      "artifactName": "ScreenDoodle-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "ScreenDoodle-${version}.${ext}",
+      "splashImage": null,
+      "requestExecutionLevel": "user"
+    }
+  }
+}

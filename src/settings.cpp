@@ -2,6 +2,7 @@
 #include "state.h"
 #include "tray.h"
 #include "updater.h"
+#include "config.h"
 
 #define IDC_CHECK_UPDATE 2003
 #define IDC_VERSION_LBL  2004
@@ -61,13 +62,19 @@ LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SendMessageW(cb, WM_SETFONT, (WPARAM)font, TRUE);
             if (IsAutoStartEnabled())
                 SendMessageW(cb, BM_SETCHECK, BST_CHECKED, 0);
-
-            HWND info = CreateWindowExW(0, L"STATIC",
+            wchar_t hotkeyInfo[320];
+            _snwprintf_s(hotkeyInfo, ARRAYSIZE(hotkeyInfo), _TRUNCATE,
                 L"Hotkeys:\n"
-                L"  Ctrl+Alt+D    —  Toggle drawing mode\n"
-                L"  Ctrl+Shift+Z  —  Undo last stroke\n"
-                L"  Ctrl+Shift+X  —  Clear canvas\n"
-                L"  Esc           —  Exit drawing mode",
+                L"  %-14s—  Toggle drawing mode\n"
+                L"  %-14s—  Undo last stroke\n"
+                L"  %-14s—  Clear canvas\n"
+                L"  %-14s—  Exit drawing mode",
+                DescribeHotkey(C.toggle).c_str(),
+                DescribeHotkey(C.undo).c_str(),
+                DescribeHotkey(C.clear).c_str(),
+                L"Esc");
+
+            HWND info = CreateWindowExW(0, L"STATIC", hotkeyInfo,
                 WS_CHILD | WS_VISIBLE,
                 24, 66, 380, 92,
                 hwnd, (HMENU)(INT_PTR)IDC_HOTKEYINFO, A.hInst, nullptr);

@@ -5,6 +5,7 @@
 #include "settings.h"
 #include "tray.h"
 #include "updater.h"
+#include "config.h"
 
 using namespace Gdiplus;
 
@@ -33,6 +34,10 @@ static LRESULT CALLBACK MsgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     break;
                 case ID_TRAY_SETTINGS:
                     OpenSettingsWindow();
+                    break;
+                case ID_TRAY_LAUNCHER:
+                case ID_TRAY_LAUNCHER_SET:
+                    OpenLauncher(LOWORD(wp) == ID_TRAY_LAUNCHER_SET);
                     break;
                 case ID_TRAY_CHECK_UPDATE:
                     StartUpdateCheck(true);
@@ -92,10 +97,53 @@ static LRESULT CALLBACK MsgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+static bool DeleteTreeOnce(const std::wstring& dir) {
+    std::wstring from = dir;
+    from.push_back(L'\0');
+    from.push_back(L'\0');
+
+    SHFILEOPSTRUCTW op{};
+    op.wFunc  = FO_DELETE;
+    op.pFrom  = from.c_str();
+    op.fFlags = FOF_NO_UI | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI;
+    SHFileOperationW(&op);
+    return GetFileAttributesW(dir.c_str()) == INVALID_FILE_ATTRIBUTES;
+}
+
+static int RunCleanup(const std::wstring& dir) {
+    if (dir.empty()) return 1;
+    for (int i = 0; i < 60; ++i) {
+        Sleep(500);
+        if (DeleteTreeOnce(dir)) break;
+    }
+    wchar_t self[MAX_PATH];
+    if (GetModuleFileNameW(nullptr, self, MAX_PATH))
+        MoveFileExW(self, nullptr, MOVEFILE_DELAY_UNTIL_REBOOT);
+    return 0;
+}
+
+static std::wstring CleanupTarget() {
+    int argc = 0;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    std::wstring target;
+    if (argv) {
+        for (int i = 1; i + 1 < argc; ++i) {
+            if (wcscmp(argv[i], L"--cleanup") == 0) { target = argv[i + 1]; break; }
+        }
+        LocalFree(argv);
+    }
+    return target;
+}
+
 int APIENTRY wWinMain(_In_ HINSTANCE hInst,
                       _In_opt_ HINSTANCE,
                       _In_ LPWSTR,
                       _In_ int) {
+    {
+        std::wstring cleanup = CleanupTarget();
+        if (!cleanup.empty()) return RunCleanup(cleanup);
+    }
+
     HANDLE mtx = CreateMutexW(nullptr, TRUE, L"ScreenDoodle_Singleton_4F2A");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
         if (mtx) CloseHandle(mtx);
@@ -103,6 +151,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInst,
     }
 
     A.hInst = hInst;
+    LoadConfig();
 
     {
         bool dpiSet = false;
@@ -163,19 +212,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInst,
     CreateTrayIcon();
 
     RegisterHotKey(A.msgWnd, HOTKEY_TOGGLE,
-                   MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'D');
+                   C.toggle.mods | MOD_NOREPEAT, C.toggle.vk);
     RegisterHotKey(A.msgWnd, HOTKEY_UNDO,
-                   MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, 'Z');
+                   C.undo.mods | MOD_NOREPEAT, C.undo.vk);
     RegisterHotKey(A.msgWnd, HOTKEY_CLEAR,
-                   MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, 'X');
+                   C.clear.mods | MOD_NOREPEAT, C.clear.vk);
+
+    wchar_t tip[128];
+    _snwprintf_s(tip, ARRAYSIZE(tip), _TRUNCATE,
+                 L"Press %s to draw on your screen.",
+                 DescribeHotkey(C.toggle).c_str());
 
     A.nid.uFlags = NIF_INFO;
     wcscpy_s(A.nid.szInfoTitle, L"ScreenDoodle is running");
-    wcscpy_s(A.nid.szInfo, L"Press Ctrl+Alt+D to draw on your screen.");
+    wcscpy_s(A.nid.szInfo, tip);
     A.nid.dwInfoFlags = NIIF_INFO;
     Shell_NotifyIconW(NIM_MODIFY, &A.nid);
-
-    StartUpdateCheck(false);
+    if (!HasLauncher()) StartUpdateCheck(false);
 
     MSG m;
     while (GetMessageW(&m, nullptr, 0, 0)) {
@@ -183,6 +236,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInst,
         TranslateMessage(&m);
         DispatchMessageW(&m);
     }
+
+    SaveConfig();
 
     UnregisterHotKey(A.msgWnd, HOTKEY_TOGGLE);
     UnregisterHotKey(A.msgWnd, HOTKEY_UNDO);

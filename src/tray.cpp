@@ -1,6 +1,7 @@
 #include "tray.h"
 #include "state.h"
 #include "updater.h"
+#include "config.h"
 
 HICON LoadAppIcon(int size) {
     HICON h = (HICON)LoadImageW(A.hInst, MAKEINTRESOURCEW(IDI_APP),
@@ -18,7 +19,10 @@ void CreateTrayIcon() {
     A.nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     A.nid.uCallbackMessage = WM_TRAYICON;
     A.nid.hIcon = LoadAppIcon(GetSystemMetrics(SM_CXSMICON));
-    wcscpy_s(A.nid.szTip, L"ScreenDoodle - Ctrl+Alt+D to draw");
+    wchar_t tip[128];
+    _snwprintf_s(tip, ARRAYSIZE(tip), _TRUNCATE, L"ScreenDoodle - %s to draw",
+                 DescribeHotkey(C.toggle).c_str());
+    wcscpy_s(A.nid.szTip, tip);
     Shell_NotifyIconW(NIM_ADD, &A.nid);
 }
 
@@ -31,19 +35,33 @@ void ShowTrayMenu() {
     POINT pt;
     GetCursorPos(&pt);
     HMENU m = CreatePopupMenu();
-    AppendMenuW(m, MF_STRING, ID_TRAY_TOGGLE,
-                A.active ? L"Stop drawing" : L"Start drawing\tCtrl+Alt+D");
-    AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(m, MF_STRING, ID_TRAY_SETTINGS, L"Settings…");
-    if (IsUpdateAvailable()) {
-        wchar_t label[128];
-        _snwprintf_s(label, ARRAYSIZE(label), _TRUNCATE,
-                     L"Install update %s", LatestVersionTag());
-        AppendMenuW(m, MF_STRING, ID_TRAY_UPDATE, label);
-    } else {
-        AppendMenuW(m, MF_STRING, ID_TRAY_CHECK_UPDATE,
-                    L"Check for updates");
+    const bool launcher = HasLauncher();
+    if (A.active) {
+        AppendMenuW(m, MF_STRING, ID_TRAY_TOGGLE, L"Stop drawing");
+        AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
+    } else if (!launcher) {
+        wchar_t startLabel[96];
+        _snwprintf_s(startLabel, ARRAYSIZE(startLabel), _TRUNCATE,
+                     L"Start drawing\t%s", DescribeHotkey(C.toggle).c_str());
+        AppendMenuW(m, MF_STRING, ID_TRAY_TOGGLE, startLabel);
+        AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
     }
+    if (launcher) {
+        AppendMenuW(m, MF_STRING, ID_TRAY_LAUNCHER,     L"Open Launcher");
+        AppendMenuW(m, MF_STRING, ID_TRAY_LAUNCHER_SET, L"Settings…");
+    } else {
+        AppendMenuW(m, MF_STRING, ID_TRAY_SETTINGS, L"Settings…");
+        if (IsUpdateAvailable()) {
+            wchar_t label[128];
+            _snwprintf_s(label, ARRAYSIZE(label), _TRUNCATE,
+                         L"Install update %s", LatestVersionTag());
+            AppendMenuW(m, MF_STRING, ID_TRAY_UPDATE, label);
+        } else {
+            AppendMenuW(m, MF_STRING, ID_TRAY_CHECK_UPDATE,
+                        L"Check for updates");
+        }
+    }
+
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(m, MF_STRING, ID_TRAY_EXIT, L"Quit ScreenDoodle");
     SetForegroundWindow(A.msgWnd);
